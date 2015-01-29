@@ -1,0 +1,4 @@
+export GREP="/bin/grep"
+export CP="/bin/cp"
+export SED="/bin/sed"
+export FIND="/bin/find"

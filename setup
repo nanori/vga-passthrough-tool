@@ -1,0 +1,126 @@
+#!/bin/sh
+[[ $1 == '-D' ]] && set -x
+typeset LOG_FUNCTIONS="./log_functions"
+typeset BINARIES="./bins"
+
+# --------------------------------------------------
+# Charging environment
+if [[ -f ${LOG_FUNCTIONS} ]]; then 
+  . ${LOG_FUNCTIONS} 
+else
+  echo "Log functions are missing (file : ${LOG_FUNCTIONS})"
+  rc=1
+fi
+
+if [[ -f ${BINARIES} ]]; then
+  . ${BINARIES}
+else
+  echo "Binaries file is missing (file : ${BINARIES})"
+  rc=1
+fi
+
+[[ $rc -ne 0 ]] && exit $rc
+
+# --------------------------------------------------
+# Setting variables
+typeset nvidia_card=""
+typeset ati_card=""
+typeset -i rc=0
+typeset deviceBus=
+typeset devicesOnBus=
+typeset devicesVendor=
+typeset vfioBindEnvDevices=
+typeset grubFile=$(${FIND} /boot -name grub.cfg)
+
+
+# --------------------------------------------------
+# Install binaries
+dspInfo "Installing vfio-bind"
+${CP} ./SOURCES/usr/local/bin/vfio-bind /usr/local/bin/vfio-bind
+
+dspInfo "Installing vfio-bind service"
+${CP} ./SOURCES/etc/sysconfig/vfio-bind-env /etc/sysconfig/vfio-bind-env
+${CP} ./SOURCES/etc/systemd/system/vfio-bind.service /etc/systemd/system/vfio-bind.service
+
+# --------------------------------------------------
+# Configure VFIO-bind
+dspInfo "Configuring vfio-bind"
+nvidia_card=$(lspci | grep -i "VGA compatible controller: NVIDIA")
+ati_card=$(lspci | grep -i "VGA compatible controller: ATI")
+
+# Detecting VGA card
+if [[ -n "${nvidia_card}" && -n "${ati_card}" ]]; then
+  dspError "Two different video card detected"
+  rc=1
+elif [[ -n "${nvidia_card}" ]]; then
+  dspInfo "NVIDIA card detected"
+  deviceBus=$(echo ${nvidia_card} | cut -d' ' -f1 | cut -d'.' -f1)
+elif [[ -n "${ati_card}" ]]; then
+  dspInfo "ATI card detected"
+  deviceBus=$(echo ${ati_card} | cut -d' ' -f1 | cut -d'.' -f1)
+fi
+
+[[ $rc -ne 0 ]] && exit $rc
+
+devicesOnBus=$(lspci -s ${deviceBus} | cut -d' ' -f1)
+devicesVendor=$(lspci -ns ${deviceBus} | cut -d' ' -f3)
+dspInfo "Card pluged on bus ${deviceBus}"
+for device in $devicesOnBus
+do
+  dspInfo "Device detected on bus $device : $(lspci -s $device | sed "s#[0-9][0-9]:[0-9][0-9]\.[0-9][0-9]*.*: ##g")"
+  vfioBindEnvDevices="${vfioBindEnvDevices} 00${device}"
+done
+
+dspInfo "Adding devices to vfio-bind service"
+${SED} -i "s#DEVICES=.*#DEVICES=\"${vfioBindEnvDevices}\"#g" /etc/sysconfig/vfio-bind-env
+
+# --------------------------------------------------
+# Configure grub
+dspInfo "Configuring grub"
+if ${GREP} -q "^GRUB_CMDLINE_LINUX=.*pci-stub.ids=" /etc/default/grub; then
+  dspInfo "Removing old pci-stub IDs from grub command line"
+  ${SED} -i "s#\(^GRUB_CMDLINE_LINUX=.*\) pci-stub.ids=[0-9a-z:,]* *\(.*\"\)#\1 \2#g" /etc/default/grub
+fi
+dspInfo "Binding card to cmdline"
+${SED} -i "s:^GRUB_CMDLINE_LINUX=\(.*\):GRUB_CMDLINE_LINUX=\"\1 pci-stub.ids=$(echo ${devicesVendor} | ${SED} "s: :,:g") \":g" /etc/default/grub
+
+if [[ -n ${grubFile} ]]; then 
+  [[ $(echo -e "${grubFile}" | wc -l) -ne 1 ]] && {
+    dspWarning "File grub.cfg not found"
+  } || {
+    dspInfo "grub.cfg find"
+    dspInfo "Saving ${grubFile} in ${grubFile}.bck"
+    ${CP} ${grubFile} ${grubFile}.bck
+    dspInfo "Generating grub.cfg"
+    grub2-mkconfig -o ${grubFile} 2>&1 | dspInfo
+  }
+else
+  dspWarning "File grub.cfg not found"
+fi
+
+# --------------------------------------------------
+# Enabling service vfio-bind
+dspInfo "Enabling vfio-bind service"
+systemctl enable vfio-bind.service
+dspInfo "Starting vfio-bind service"
+systemctl start vfio-bind.service
+
+
+# --------------------------------------------------
+# Generating qemu cmd line
+dspInfo "Generating qemu commandline for libvirt XML file"
+dspInfo "This section must be add just before </domain>"
+echo "<qemu:commandline>"
+for device in $devicesOnBus
+do
+  vga=$(lspci -s ${device} | grep VGA)
+  [[ -n $vga ]] && vga=",x-vga=on" 
+  echo "  <qemu:arg value='-device'/>"
+  echo "  <qemu:arg value='vfio-pci,host=${device}${vga}'/>"
+done
+echo "  <qemu:arg value='-vga'/>"
+echo "  <qemu:arg value='none'/>"
+echo "</qemu:commandline>"
+
+dspInfo "Now, you should create a VM in libvirt and delete all VGA devices"
+

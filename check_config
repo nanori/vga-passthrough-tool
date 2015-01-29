@@ -1,0 +1,84 @@
+#!/bin/sh
+[[ $1 == "-D" ]] && set -x
+typeset KERNEL_RELEASE=$(uname -r)
+typeset KERNEL_CONFIG_FILE="/boot/config-${KERNEL_RELEASE}"
+typeset LOG_FUNCTIONS="./log_functions"
+typeset BINARIES="./bins"
+
+# --------------------------------------------------
+# Charging environment
+if [[ -f ${LOG_FUNCTIONS} ]]; then 
+  . ${LOG_FUNCTIONS} 
+else
+  echo "Log functions are missing (file : ${LOG_FUNCTIONS})"
+  rc=1
+fi
+
+if [[ -f ${BINARIES} ]]; then
+  . ${BINARIES}
+else
+  echo "Binaries file is missing (file : ${BINARIES})"
+  rc=1
+fi
+
+[[ $rc -ne 0 ]] && exit $rc
+
+# --------------------------------------------------
+# Setting variables
+typeset -i rc=0
+
+# --------------------------------------------------
+# Check VT-d
+dspInfo "Checking VT-d or IOMMU capability"
+(${GREP} -q "^flags.*vmx" /proc/cpuinfo || ${GREP} -q "^flags.*svm" /proc/cpuinfo ) || {
+  dspError "VT-d or IOMMU isn't enable in bios"
+  exit 1
+}
+
+
+# --------------------------------------------------
+# Check kernel configuration
+dspInfo "Checking kernel config : IOMMU_TYPE1"
+${GREP} -q "CONFIG_VFIO_IOMMU_TYPE1=[m|y]" ${KERNEL_CONFIG_FILE} || {
+  rc=1
+  dspError "IOMMU_TYPE1 not enable in kernel config"
+}
+
+dspInfo "Checking kernel config : VFIO"
+${GREP} -q "CONFIG_VFIO=[m|y]" ${KERNEL_CONFIG_FILE} || {
+  rc=1
+  dspError "VFIO not enable in kernel config"
+}
+
+
+dspInfo "Checking kernel config : VFIO_PCI"
+${GREP} -q "CONFIG_VFIO_PCI=[m|y]" ${KERNEL_CONFIG_FILE} || {
+  rc=1
+  dspError "VFIO_PCI not enable in kernel config"
+}
+
+
+dspInfo "Checking kernel config : VFIO_PCI_VGA"
+${GREP} -q "CONFIG_VFIO_PCI_VGA=[m|y]" ${KERNEL_CONFIG_FILE} || {
+  rc=1
+  dspError "VFIO_PCI_VGA not enable in kernel config"
+}
+
+
+dspInfo "Checking kernel config : KVM_VFIO"
+${GREP} -q "CONFIG_KVM_VFIO=[m|y]" ${KERNEL_CONFIG_FILE} || {
+  rc=1
+  dspError "KVM_VFIO not enable in kernel config"
+}
+
+
+# --------------------------------------------------
+# Check vgaarb patch
+dspInfo "Checking vgaarb patch"
+[[ -f /sys/module/i915/parameters/enable_hd_vgaarb ]] || {
+  rc=1
+  dspError "Kernel isn't patched i915.vgaarb"
+}
+
+[[ $rc -ne 0 ]] && exit $rc
+

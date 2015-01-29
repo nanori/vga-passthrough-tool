@@ -1,0 +1,42 @@
+export LOG_FILE="/var/log/vga-passthrough.$(date "+%Y%m%d-%H%M%S").log"
+
+dspInfo () {
+  if [ -n "$1" ]
+  then
+    IN=$1
+    echo "$(date "+%Y-%m-%d_%H:%M:%S") |    INFO | $IN" | tee -a $LOG_FILE
+  else
+    while read IN
+    do
+      echo "$(date "+%Y-%m-%d_%H:%M:%S") |    INFO | $IN" | tee -a $LOG_FILE
+    done
+  fi
+
+}
+
+dspWarning () {
+  if [ -n "$1" ]
+  then
+    IN=$1
+    echo "$(date "+%Y-%m-%d_%H:%M:%S") | WARNING | $IN" | tee -a $LOG_FILE
+  else
+    while read IN
+    do
+      echo "$(date "+%Y-%m-%d_%H:%M:%S") | WARNING | $IN" | tee -a $LOG_FILE
+    done
+  fi
+}
+
+dspError () {
+  if [ -n "$1" ]
+  then
+    IN=$1
+    echo "$(date "+%Y-%m-%d_%H:%M:%S") |   ERROR | $IN" | tee -a $LOG_FILE
+  else
+    while read IN
+    do
+      echo "$(date "+%Y-%m-%d_%H:%M:%S") |   ERROR | $IN" | tee -a $LOG_FILE
+    done
+  fi
+}
+
