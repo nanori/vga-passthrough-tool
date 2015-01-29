@@ -1,0 +1,12 @@
+[Unit]
+Description=Binds devices to vfio-pci
+After=syslog.target
+
+[Service]
+EnvironmentFile=/etc/sysconfig/vfio-bind-env
+ExecStart=/usr/local/bin/vfio-bind
+Type=oneshot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,2 @@
+# DEVICES : IDs of pci devices to give to vfio-pci
+DEVICES=""
