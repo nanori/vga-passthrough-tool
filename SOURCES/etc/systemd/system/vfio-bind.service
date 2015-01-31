@@ -4,7 +4,7 @@ After=syslog.target
 
 [Service]
 EnvironmentFile=/etc/sysconfig/vfio-bind-env
-ExecStart=/usr/local/bin/vfio-bind
+ExecStart=/usr/local/bin/vfio-bind $DEVICES
 Type=oneshot
 RemainAfterExit=yes
 

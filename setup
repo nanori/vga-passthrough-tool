@@ -68,7 +68,7 @@ dspInfo "Card pluged on bus ${deviceBus}"
 for device in $devicesOnBus
 do
   dspInfo "Device detected on bus $device : $(lspci -s $device | sed "s#[0-9][0-9]:[0-9][0-9]\.[0-9][0-9]*.*: ##g")"
-  vfioBindEnvDevices="${vfioBindEnvDevices} 00${device}"
+  vfioBindEnvDevices="${vfioBindEnvDevices} 0000:${device}"
 done
 
 dspInfo "Adding devices to vfio-bind service"
@@ -82,7 +82,7 @@ if ${GREP} -q "^GRUB_CMDLINE_LINUX=.*pci-stub.ids=" /etc/default/grub; then
   ${SED} -i "s#\(^GRUB_CMDLINE_LINUX=.*\) pci-stub.ids=[0-9a-z:,]* *\(.*\"\)#\1 \2#g" /etc/default/grub
 fi
 dspInfo "Binding card to cmdline"
-${SED} -i "s:^GRUB_CMDLINE_LINUX=\(.*\):GRUB_CMDLINE_LINUX=\"\1 pci-stub.ids=$(echo ${devicesVendor} | ${SED} "s: :,:g") \":g" /etc/default/grub
+${SED} -i "s!^GRUB_CMDLINE_LINUX=\"\(.*\)\"!GRUB_CMDLINE_LINUX=\"\1 pci-stub.ids=$(echo ${devicesVendor} | ${SED} "s# #,#g") \"!g" /etc/default/grub
 
 if [[ -n ${grubFile} ]]; then 
   [[ $(echo -e "${grubFile}" | wc -l) -ne 1 ]] && {
