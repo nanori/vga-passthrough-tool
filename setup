@@ -76,13 +76,28 @@ ${SED} -i "s#DEVICES=.*#DEVICES=\"${vfioBindEnvDevices}\"#g" /etc/sysconfig/vfio
 
 # --------------------------------------------------
 # Configure grub
+# Adding devices to pci-stub
+dspInfo "Saving grub configuration file in /etc/default/grub.old"
+cp /etc/default/grub /etc/default/grub.old
 dspInfo "Configuring grub"
 if ${GREP} -q "^GRUB_CMDLINE_LINUX=.*pci-stub.ids=" /etc/default/grub; then
   dspInfo "Removing old pci-stub IDs from grub command line"
   ${SED} -i "s#\(^GRUB_CMDLINE_LINUX=.*\) pci-stub.ids=[0-9a-z:,]* *\(.*\"\)#\1 \2#g" /etc/default/grub
 fi
 dspInfo "Binding card to cmdline"
-${SED} -i "s!^GRUB_CMDLINE_LINUX=\"\(.*\)\"!GRUB_CMDLINE_LINUX=\"\1 pci-stub.ids=$(echo ${devicesVendor} | ${SED} "s# #,#g") \"!g" /etc/default/grub
+${SED} -i "s%^GRUB_CMDLINE_LINUX=\"\(.*\)\"%GRUB_CMDLINE_LINUX=\"\1 pci-stub.ids=$(echo ${devicesVendor} | ${SED} "s# #,#g") \"%g" /etc/default/grub
+
+# Adding i915 vga arb option
+if ! ${GREP} -q "^GRUB_CMDLINE_LINUX=.*i915.enable_hd_vgaarb=1.*" /etc/default/grub; then
+  dspInfo "Adding i915.enable_hd_vgaarb option"
+  ${SED} -i "s%^GRUB_CMDLINE_LINUX=\"\(.*\)\"%GRUB_CMDLINE_LINUX=\"\1 i915.enable_hd_vgaarb=1 \"%g" /etc/default/grub
+fi
+
+# Adding iommu option
+if ! ${GREP} -q "^GRUB_CMDLINE_LINUX=.*intel_iommu=on.*" /etc/default/grub; then
+  dspInfo "Adding intel_iommu option"
+  ${SED} -i "s%^GRUB_CMDLINE_LINUX=\"\(.*\)\"%GRUB_CMDLINE_LINUX=\"\1 intel_iommu=on\"%g" /etc/default/grub
+fi
 
 if [[ -n ${grubFile} ]]; then 
   [[ $(echo -e "${grubFile}" | wc -l) -ne 1 ]] && {
